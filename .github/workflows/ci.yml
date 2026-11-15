@@ -46,4 +46,4 @@ jobs:
       - name: Compile and smoke-test package
         run: |
           python -m compileall -q hybridrouter.py tests
-          python -c "from hybridrouter import HybridRouter; r = HybridRouter(); print(type(r).__name__)"
+          python -c "from hybridrouter import HybridRouter; print(type(HybridRouter()).__name__)"
