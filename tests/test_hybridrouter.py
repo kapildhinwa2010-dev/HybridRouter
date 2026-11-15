@@ -1,1 +1,59 @@
-"""Tests for HybridRouter: multi-signal blended routing."""\n\nimport numpy as np\nimport pytest\n\nfrom hybridrouter import HybridRouter, blend_score, signal_scores, DEFAULT_WEIGHTS\n\n\ndef test_signal_scores_keys_and_ranges():\n    signals = signal_scores(np.array([1.0, 1.0, 1.0, 0.0]))\n    assert set(signals) == {"norm", "entropy", "sparsity", "dimension"}\n    assert 0.0 <= signals["entropy"] <= 1.0\n    assert 0.0 <= signals["sparsity"] <= 1.0\n    assert signals["dimension"] == 4.0\n\n\ndef test_signal_scores_empty_raises():\n    with pytest.raises(ValueError):\n        signal_scores(np.array([]))\n\n\ndef test_blend_score_uses_defaults_and_overrides():\n    signals = {"norm": 2.0, "entropy": 1.0, "sparsity": 0.0, "dimension": 100.0}\n    base = blend_score(signals)\n    assert base == pytest.approx(2.0 + 1.0 + 0.0 + 0.1)\n    custom = blend_score(signals, {"norm": 10.0})\n    assert custom == pytest.approx(20.0 + 1.0 + 0.0 + 0.1)\n    assert DEFAULT_WEIGHTS["entropy"] == 1.0\n\n\ndef test_route_uses_expert_specific_weights():\n    router = HybridRouter()\n    # sparse-happy expert: sparsity lowers its blended score\n    router.add_expert("sparse", capacity=5.0, cost=1.0, weights={"sparsity": -1.0})\n    router.add_expert("dense", capacity=5.0, cost=1.0, weights={"sparsity": 2.0})\n    vector = np.array([0.0, 0.0, 0.0, 1.0])\n    breakdown = router.signal_breakdown(vector)\n    assert breakdown["sparse"] < breakdown["dense"]\n    assert router.route(vector).name == "sparse"\n\n\ndef test_route_no_capacity_raises():\n    router = HybridRouter()\n    router.add_expert("tiny", capacity=0.001)\n    with pytest.raises(ValueError):\n        router.route(np.array([100.0, 100.0]))\n\n\ndef test_route_empty_router_raises():\n    with pytest.raises(ValueError):\n        HybridRouter().route(np.array([1.0]))\n\n\ndef test_route_and_handle_and_report():\n    router = HybridRouter()\n    router.add_expert("e", capacity=100.0)\n    out = router.route_and_handle(np.array([1.0, 2.0]))\n    assert "handled by e" in out\n    assert router.usage_report() == {"e": 1}\n
+"""Tests for HybridRouter: multi-signal blended routing."""
+
+import numpy as np
+import pytest
+
+from hybridrouter import HybridRouter, blend_score, signal_scores, DEFAULT_WEIGHTS
+
+
+def test_signal_scores_keys_and_ranges():
+    signals = signal_scores(np.array([1.0, 1.0, 1.0, 0.0]))
+    assert set(signals) == {"norm", "entropy", "sparsity", "dimension"}
+    assert 0.0 <= signals["entropy"] <= 1.0
+    assert 0.0 <= signals["sparsity"] <= 1.0
+    assert signals["dimension"] == 4.0
+
+
+def test_signal_scores_empty_raises():
+    with pytest.raises(ValueError):
+        signal_scores(np.array([]))
+
+
+def test_blend_score_uses_defaults_and_overrides():
+    signals = {"norm": 2.0, "entropy": 1.0, "sparsity": 0.0, "dimension": 100.0}
+    base = blend_score(signals)
+    assert base == pytest.approx(2.0 + 1.0 + 0.0 + 0.1)
+    custom = blend_score(signals, {"norm": 10.0})
+    assert custom == pytest.approx(20.0 + 1.0 + 0.0 + 0.1)
+    assert DEFAULT_WEIGHTS["entropy"] == 1.0
+
+
+def test_route_uses_expert_specific_weights():
+    router = HybridRouter()
+    # sparse-happy expert: sparsity lowers its blended score
+    router.add_expert("sparse", capacity=5.0, cost=1.0, weights={"sparsity": -1.0})
+    router.add_expert("dense", capacity=5.0, cost=1.0, weights={"sparsity": 2.0})
+    vector = np.array([0.0, 0.0, 0.0, 1.0])
+    breakdown = router.signal_breakdown(vector)
+    assert breakdown["sparse"] < breakdown["dense"]
+    assert router.route(vector).name == "sparse"
+
+
+def test_route_no_capacity_raises():
+    router = HybridRouter()
+    router.add_expert("tiny", capacity=0.001)
+    with pytest.raises(ValueError):
+        router.route(np.array([100.0, 100.0]))
+
+
+def test_route_empty_router_raises():
+    with pytest.raises(ValueError):
+        HybridRouter().route(np.array([1.0]))
+
+
+def test_route_and_handle_and_report():
+    router = HybridRouter()
+    router.add_expert("e", capacity=100.0)
+    out = router.route_and_handle(np.array([1.0, 2.0]))
+    assert "handled by e" in out
+    assert router.usage_report() == {"e": 1}
